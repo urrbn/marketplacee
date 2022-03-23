@@ -4,20 +4,21 @@ require("@nomiclabs/hardhat-etherscan");
 require("@nomiclabs/hardhat-waffle");
 require("hardhat-gas-reporter");
 require("solidity-coverage");
+require("./tasks/mint.js");
 
 
 module.exports = {
   solidity: "0.8.9",
   networks: {
+    rinkeby: {
+      url: process.env.RINKEBY_URL || "",
+      accounts:
+        process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
+    },
     hardhat: {
       forking: {
-        url: process.env.URL || "",
+        url: process.env.FORK_URL || "",
       },
-      allowUnlimitedContractSize: true
-    },
-    binance: {
-      url: process.env.URL || "",
-      accounts: process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
       allowUnlimitedContractSize: true
     },
   },

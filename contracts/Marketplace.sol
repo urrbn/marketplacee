@@ -1,152 +1,9 @@
 pragma solidity ^0.8.9;
 
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/utils/Counters.sol";
 
 
-interface IERC165 {
-    /**
-     * @dev Returns true if this contract implements the interface defined by
-     * `interfaceId`. See the corresponding
-     * https://eips.ethereum.org/EIPS/eip-165#how-interfaces-are-identified[EIP section]
-     * to learn more about how these ids are created.
-     *
-     * This function call must use less than 30 000 gas.
-     */
-    function supportsInterface(bytes4 interfaceId) external view returns (bool);
-}
-
-interface IERC721 is IERC165 {
-    /**
-     * @dev Emitted when `tokenId` token is transferred from `from` to `to`.
-     */
-    event Transfer(address indexed from, address indexed to, uint256 indexed tokenId);
-
-    /**
-     * @dev Emitted when `owner` enables `approved` to manage the `tokenId` token.
-     */
-    event Approval(address indexed owner, address indexed approved, uint256 indexed tokenId);
-
-    /**
-     * @dev Emitted when `owner` enables or disables (`approved`) `operator` to manage all of its assets.
-     */
-    event ApprovalForAll(address indexed owner, address indexed operator, bool approved);
-
-    /**
-     * @dev Returns the number of tokens in ``owner``'s account.
-     */
-    function balanceOf(address owner) external view returns (uint256 balance);
-
-    /**
-     * @dev Returns the owner of the `tokenId` token.
-     *
-     * Requirements:
-     *
-     * - `tokenId` must exist.
-     */
-    function ownerOf(uint256 tokenId) external view returns (address owner);
-
-    /**
-     * @dev Safely transfers `tokenId` token from `from` to `to`, checking first that contract recipients
-     * are aware of the ERC721 protocol to prevent tokens from being forever locked.
-     *
-     * Requirements:
-     *
-     * - `from` cannot be the zero address.
-     * - `to` cannot be the zero address.
-     * - `tokenId` token must exist and be owned by `from`.
-     * - If the caller is not `from`, it must be have been allowed to move this token by either {approve} or {setApprovalForAll}.
-     * - If `to` refers to a smart contract, it must implement {IERC721Receiver-onERC721Received}, which is called upon a safe transfer.
-     *
-     * Emits a {Transfer} event.
-     */
-    function safeTransferFrom(
-        address from,
-        address to,
-        uint256 tokenId
-    ) external;
-
-    /**
-     * @dev Transfers `tokenId` token from `from` to `to`.
-     *
-     * WARNING: Usage of this method is discouraged, use {safeTransferFrom} whenever possible.
-     *
-     * Requirements:
-     *
-     * - `from` cannot be the zero address.
-     * - `to` cannot be the zero address.
-     * - `tokenId` token must be owned by `from`.
-     * - If the caller is not `from`, it must be approved to move this token by either {approve} or {setApprovalForAll}.
-     *
-     * Emits a {Transfer} event.
-     */
-    function transferFrom(
-        address from,
-        address to,
-        uint256 tokenId
-    ) external;
-
-    /**
-     * @dev Gives permission to `to` to transfer `tokenId` token to another account.
-     * The approval is cleared when the token is transferred.
-     *
-     * Only a single account can be approved at a time, so approving the zero address clears previous approvals.
-     *
-     * Requirements:
-     *
-     * - The caller must own the token or be an approved operator.
-     * - `tokenId` must exist.
-     *
-     * Emits an {Approval} event.
-     */
-    function approve(address to, uint256 tokenId) external;
-
-    /**
-     * @dev Returns the account approved for `tokenId` token.
-     *
-     * Requirements:
-     *
-     * - `tokenId` must exist.
-     */
-    function getApproved(uint256 tokenId) external view returns (address operator);
-
-    /**
-     * @dev Approve or remove `operator` as an operator for the caller.
-     * Operators can call {transferFrom} or {safeTransferFrom} for any token owned by the caller.
-     *
-     * Requirements:
-     *
-     * - The `operator` cannot be the caller.
-     *
-     * Emits an {ApprovalForAll} event.
-     */
-    function setApprovalForAll(address operator, bool _approved) external;
-
-    /**
-     * @dev Returns if the `operator` is allowed to manage all of the assets of `owner`.
-     *
-     * See {setApprovalForAll}
-     */
-    function isApprovedForAll(address owner, address operator) external view returns (bool);
-
-    /**
-     * @dev Safely transfers `tokenId` token from `from` to `to`.
-     *
-     * Requirements:
-     *
-     * - `from` cannot be the zero address.
-     * - `to` cannot be the zero address.
-     * - `tokenId` token must exist and be owned by `from`.
-     * - If the caller is not `from`, it must be approved to move this token by either {approve} or {setApprovalForAll}.
-     * - If `to` refers to a smart contract, it must implement {IERC721Receiver-onERC721Received}, which is called upon a safe transfer.
-     *
-     * Emits a {Transfer} event.
-     */
-    function safeTransferFrom(
-        address from,
-        address to,
-        uint256 tokenId,
-        bytes calldata data
-    ) external;
-}
 
 interface IERC20 {
     /**
@@ -223,22 +80,23 @@ interface IERC20 {
     event Approval(address indexed owner, address indexed spender, uint256 value);
 }
 
-contract Marketplace {
+contract Marketplace is ERC721 {
     
-    struct MarketItem {
-        uint256 id;
-        address tokenAddress;
-        uint256 tokenId;
-        address payable seller;
-        uint256 askingPrice;
-        bool isSold;
-    }
+    using Counters for Counters.Counter;
+    Counters.Counter private _tokenIds;
+
+    enum ListingStatus {
+		Active,
+		Sold,
+		Cancelled
+	}
 
     struct AuctionItem{
-        uint256 id;
+        ListingStatus status;
         address tokenAddress;
         uint256 tokenId;
-        address payable seller;
+        address seller;
+        uint256 askingPrice;
         uint256 bidPrice;
         uint256 auctionStartTime; 
         uint256 auctionEndTime;
@@ -246,20 +104,30 @@ contract Marketplace {
         uint256 numBids;
     }
 
+    struct Item {
+        uint256 id;
+        address creator;
+        string uri;
+    }
+
 
     IERC20 internal immutable Token =
-        IERC20(address(0x28b5F469B9763b940D4F9AD2840A59660Cb7Fd60)); 
+        IERC20(address(0x6a4E4746b6c375b972CCc7147dB416Bdda738C4f)); 
            
            
-    MarketItem[] public itemsForSale;
-    AuctionItem[] public AuctionItemsForSale;
+
 
     uint256 public defaultAuctionBidPeriod = 86400 * 3; //3 days
+    uint public itemId = 0;
 
     mapping (address => mapping (uint256 => bool)) activeItems;
+    mapping(uint256 => AuctionItem) auctionItems;
+    mapping (uint256 => Item) public Items;
 
     event itemAdded(uint256 id, uint256 tokenId, address tokenAddress, uint256 askingPrice);
     event itemSold(uint256 id, address buyer, uint256 askingPrice);
+    event itemListedOnAuction();
+    event cancelled(uint256 id);
 
     modifier OnlyItemOwner(address tokenAddress, uint256 tokenId){
         IERC721 tokenContract = IERC721(tokenAddress);
@@ -273,61 +141,71 @@ contract Marketplace {
         _;
     }
 
-    modifier ItemExists(uint256 id){
-        require(id < itemsForSale.length && itemsForSale[id].id == id, "Could not find item");
-        _;
-    }
 
-    modifier IsForSale(uint256 id){
-        require(itemsForSale[id].isSold == false, "Item is already sold!");
-        _;
-    }
+    constructor () ERC721("NFT", "NFT"){}
 
+    function createItem(string memory uri) public returns (uint256){
+        _tokenIds.increment();
+        uint256 newItemId = _tokenIds.current();
+        _safeMint(msg.sender, newItemId);
 
-    function listItem(uint256 tokenId, address tokenAddress, uint256 askingPrice) OnlyItemOwner(tokenAddress,tokenId) HasTransferApproval(tokenAddress,tokenId) external returns (uint256){
-        require(activeItems[tokenAddress][tokenId] == false, "Item is already up for sale!");
-        uint256 newItemId = itemsForSale.length;  
-        itemsForSale.push(MarketItem(newItemId, tokenAddress, tokenId, payable(msg.sender), askingPrice, false));
-        activeItems[tokenAddress][tokenId] = true;
+        Items[newItemId] = Item(newItemId, msg.sender, uri);
 
-        assert(itemsForSale[newItemId].id == newItemId);
-        emit itemAdded(newItemId, tokenId, tokenAddress, askingPrice);
         return newItemId;
     }
 
+    function tokenURI(uint256 tokenId) public view override returns (string memory) {
+        require(_exists(tokenId), "ERC721Metadata: URI query for nonexistent token");
 
-    function buyItem(uint256 id) external ItemExists(id) IsForSale(id) HasTransferApproval(itemsForSale[id].tokenAddress,itemsForSale[id].tokenId){
-        require(msg.sender != itemsForSale[id].seller);
+        return Items[tokenId].uri;
+    }
 
-        uint256 amount = itemsForSale[id].askingPrice ;
+    function listItem(uint256 tokenId, address tokenAddress, uint256 askingPrice) OnlyItemOwner(tokenAddress,tokenId) HasTransferApproval(tokenAddress,tokenId) external {
+        require(activeItems[tokenAddress][tokenId] == false, "Item is already up for sale!");
+        IERC721 tokenContract = IERC721(tokenAddress);
+        AuctionItem memory item = AuctionItem(ListingStatus.Active, tokenAddress, tokenId, msg.sender, askingPrice, 0, 0, 0, address(0), 0);
+        itemId++;
+        auctionItems[itemId] = item;
+        activeItems[tokenAddress][tokenId] = true;
+        tokenContract.transferFrom(msg.sender, address(this), item.tokenId);
+     
+    }
+
+
+    function buyItem(uint256 id) external {
+        AuctionItem memory item = auctionItems[id];
+        require(item.status == ListingStatus.Active, "Listing is not active");
+        require(msg.sender != item.seller);
+
+        uint256 amount = item.askingPrice ;
         
 
-        itemsForSale[id].isSold = true;
-        activeItems[itemsForSale[id].tokenAddress][itemsForSale[id].tokenId] = false;
-        IERC721(itemsForSale[id].tokenAddress).safeTransferFrom(itemsForSale[id].seller, msg.sender, itemsForSale[id].tokenId);
+        item.status = ListingStatus.Sold;
+        activeItems[item.tokenAddress][item.tokenId] = false;
+        IERC721(item.tokenAddress).safeTransferFrom(address(this), msg.sender, item.tokenId);
         require(Token.allowance(msg.sender, address(this)) >= amount, "Insufficient allowance.");
         require(Token.balanceOf(msg.sender) >= amount, "Insufficient balance.");
-        Token.transferFrom(msg.sender, itemsForSale[id].seller, amount);
+        Token.transferFrom(msg.sender, item.seller, amount);
+        auctionItems[id] = item;
 
         emit itemSold(id, msg.sender, amount);
     }
 
-    function listItemOnAuction(uint256 tokenId, address tokenAddress, uint256 startPrice) external {
+    function listItemOnAuction(uint256 tokenId, address tokenAddress, uint256 startPrice) OnlyItemOwner(tokenAddress,tokenId) HasTransferApproval(tokenAddress,tokenId) external {
         IERC721 tokenContract = IERC721(tokenAddress);
-        require(activeItems[tokenAddress][tokenId] == false, "Item is already up for sale!");
-        require(tokenContract.ownerOf(tokenId) == msg.sender, "Missing Item Ownership");
-        require(tokenContract.getApproved(tokenId) == address(this), "Missing transfer approval");
-        uint256 newItemId = itemsForSale.length;
-        AuctionItemsForSale.push(AuctionItem(newItemId, tokenAddress, tokenId, payable(msg.sender), startPrice, block.timestamp, block.timestamp + defaultAuctionBidPeriod, address(0), 0));
-        activeItems[tokenAddress][tokenId] = true;
-        assert(AuctionItemsForSale[newItemId].id == newItemId);
-
         require(startPrice > 0, "Item must have a price");
+        require(activeItems[tokenAddress][tokenId] == false, "Item is already up for sale!");
+        AuctionItem memory item = AuctionItem(ListingStatus.Active, tokenAddress, tokenId, msg.sender, 0, startPrice, block.timestamp, block.timestamp + defaultAuctionBidPeriod, address(0), 0);
+        itemId++;
+        auctionItems[itemId] = item;
+        activeItems[tokenAddress][tokenId] = true;
+        tokenContract.transferFrom(msg.sender, address(this), item.tokenId);
+        emit itemListedOnAuction();
 
     }
 
     function makeBid(uint256 id, uint256 bid) external {
-        AuctionItem memory item = AuctionItemsForSale[id];
+        AuctionItem memory item = auctionItems[id];
         require(block.timestamp < item.auctionEndTime || item.highestBidder == address(0), "Auction has ended");
         if (item.highestBidder != address(0)){
             require(bid >= item.bidPrice * 110 / 100, "Bid must be 10% higher than previous bid");
@@ -344,7 +222,7 @@ contract Marketplace {
         item.highestBidder = msg.sender;
         item.numBids += 1;
         item.bidPrice = bid;
-        AuctionItemsForSale[id] = item;
+        auctionItems[id] = item;
 
         require(Token.allowance(msg.sender, address(this)) >= bid, "Insufficient allowance.");
         require(Token.balanceOf(msg.sender) >= bid, "Insufficient balance.");
@@ -353,17 +231,30 @@ contract Marketplace {
     }
 
     function finishAuction(uint256 id) external {
-        AuctionItem memory item = AuctionItemsForSale[id];
+        AuctionItem memory item = auctionItems[id];
         require(item.highestBidder != address(0),"No bids have been placed");
-        require(block.timestamp >= item.auctionEndTime); 
+        require(block.timestamp >= item.auctionEndTime, "The auction is still active"); 
         if(item.numBids <= 2){
            Token.transfer(item.highestBidder, item.bidPrice);
         } else {
-           activeItems[itemsForSale[id].tokenAddress][itemsForSale[id].tokenId] = false;
-           IERC721(AuctionItemsForSale[id].tokenAddress).safeTransferFrom(AuctionItemsForSale[id].seller, item.highestBidder, AuctionItemsForSale[id].tokenId); 
+           activeItems[item.tokenAddress][item.tokenId] = false;
+           IERC721(item.tokenAddress).safeTransferFrom(address(this), item.highestBidder, item.tokenId); 
         }
+        activeItems[item.tokenAddress][item.tokenId] = false;
+        item.status = ListingStatus.Sold;
+        auctionItems[id] = item;
 
     }
 
-
+    function cancel(uint256 id) external {
+        AuctionItem memory item = auctionItems[id];
+        require(msg.sender == item.seller, "Only seller can cancel listing");
+		require(item.status == ListingStatus.Active, "Listing is not active");
+        
+        activeItems[item.tokenAddress][item.tokenId] = false;
+        item.status = ListingStatus.Cancelled;
+        IERC721(item.tokenAddress).transferFrom(address(this), msg.sender, item.tokenId);
+        auctionItems[id] = item;
+        emit cancelled(id);
+    }
 }

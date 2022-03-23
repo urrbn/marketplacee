@@ -1,15 +1,12 @@
 const hre = require("hardhat");
 
 async function main() {
-  
-  
-  
-  const Token = await hre.ethers.getContractFactory("Marketplace");
-  const token = await Token.deploy();
+  const Marketplace = await hre.ethers.getContractFactory("Marketplace");
+  const marketplace = await Marketplace.deploy();
 
-  await token.deployed();
+  await marketplace.deployed();
 
-  console.log("token deployed to:", token.address);
+  console.log("marketplace deployed to:", marketplace.address);
 };
 
 
